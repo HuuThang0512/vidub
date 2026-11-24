@@ -71,6 +71,7 @@ td textarea:focus{border-color:var(--acc);background:var(--panel2);outline:none}
   <span class="muted" id="verInfo"></span>
   <button id="btnUpdate" class="hide pri" onclick="doUpdate()" style="padding:5px 12px">⬆ Cập nhật bản mới</button>
   <span class="muted" id="keyInfo"></span>
+  <button onclick="quitApp()" title="Tắt hẳn ViDub (chạy ngầm)" style="padding:5px 12px">⏻ Tắt ViDub</button>
 </header>
 
 <div class="wrap">
@@ -396,13 +397,19 @@ async function render(){
   refresh();
 }
 
-function offline(){$('stMsg').innerHTML='<span class="err">⚠ Không kết nối được ViDub. Mở lại shortcut ViDub trên Desktop và giữ cửa sổ đen đó mở trong lúc dùng.</span>'}
+function offline(){if(window._quitting)return;const e=$('stMsg');if(e)e.innerHTML='<span class="err">⚠ Không kết nối được ViDub. Bấm biểu tượng ViDub trên Desktop để mở lại.</span>'}
 window.addEventListener('unhandledrejection',e=>{const m=String(e.reason&&e.reason.message||e.reason);if(m.includes('Failed to fetch'))offline();else $('stMsg').innerHTML='<span class="err">⚠ '+esc(m)+'</span>'});
 setInterval(()=>fetch('/api/config').catch(offline),5000);
 async function cancelJob(){
   $('btnCancel').disabled=true;$('stMsg').textContent='Đang hủy...';window._rendering=false;
   try{await post(`/api/job/${JOB}/cancel`)}catch(e){}
   setTimeout(refresh,800);
+}
+async function quitApp(){
+  if(!confirm('Tắt ViDub? (Lần sau mở lại bằng biểu tượng ViDub trên Desktop)'))return;
+  window._quitting=true;
+  try{await post('/api/shutdown')}catch(e){}
+  document.body.innerHTML='<div style="display:grid;place-items:center;height:100vh;text-align:center;font:16px Segoe UI;color:#8b93a7"><div><h2 style="color:#e8eaf0">ViDub đã tắt 👋</h2>Mở lại bằng biểu tượng <b>ViDub</b> trên Desktop. Có thể đóng tab này.</div></div>';
 }
 async function checkUpdate(){
   try{const v=await api('/api/version');$('verInfo').textContent='Phiên bản '+v.current;

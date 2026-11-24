@@ -58,7 +58,7 @@ if (-not $env:VIDUB_NO_SHORTCUT) {
 $desk = [Environment]::GetFolderPath('Desktop')
 $ws = New-Object -ComObject WScript.Shell
 $lnk = $ws.CreateShortcut("$desk\ViDub.lnk")
-$lnk.TargetPath = "$Root\ViDub.bat"
+$lnk.TargetPath = "$Root\ViDub.vbs"
 $lnk.WorkingDirectory = $Root
 $lnk.IconLocation = "$env:SystemRoot\System32\imageres.dll,18"
 $lnk.Save()

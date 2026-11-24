@@ -11,6 +11,13 @@ if os.path.isdir(_ff): os.environ['PATH'] = _ff + os.pathsep + os.environ.get('P
 if PORTABLE: os.environ.setdefault('HF_HOME', os.path.join(ROOT, 'models'))  # keep models inside the app folder
 os.environ.setdefault('HF_HUB_DISABLE_SYMLINKS_WARNING', '1')
 import sys
+if os.name == 'nt':
+    _Popen = subprocess.Popen
+    class _NoWinPopen(_Popen):
+        def __init__(self, *a, **kw):
+            if not kw.get('creationflags'): kw['creationflags'] = 0x08000000  # CREATE_NO_WINDOW
+            super().__init__(*a, **kw)
+    subprocess.Popen = _NoWinPopen
 VERSION = (open(os.path.join(ROOT, 'VERSION'), encoding='utf-8').read().strip()
            if os.path.exists(os.path.join(ROOT, 'VERSION')) else 'dev')
 JOBS = os.path.join(ROOT, 'jobs')
@@ -569,11 +576,23 @@ def do_update():
     except Exception as e: return jsonify({'error': str(e)[:300]}), 500
     def restart():
         time.sleep(1.5)
-        bat = os.path.join(ROOT, 'ViDub.bat')
-        subprocess.Popen(['cmd', '/c', 'start', '', bat], cwd=ROOT, creationflags=getattr(subprocess, 'CREATE_NEW_CONSOLE', 0))
+        os.environ['VIDUB_NO_BROWSER'] = '1'  # the open page reloads itself
+        subprocess.Popen(['wscript', os.path.join(ROOT, 'ViDub.vbs')], cwd=ROOT)
         os._exit(0)
     threading.Thread(target=restart, daemon=True).start()
     return jsonify({'ok': True, 'msg': msg})
+
+@app.post('/api/shutdown')
+def shutdown():
+    for j, s in STATE.items():
+        if s.get('busy'): s['cancel'] = True
+    def bye():
+        time.sleep(0.8)
+        try: VIENEU.p and VIENEU.p.kill()
+        except Exception: pass
+        os._exit(0)
+    threading.Thread(target=bye, daemon=True).start()
+    return jsonify({'ok': True})
 
 @app.post('/api/job/<j>/cancel')
 def cancel(j):
@@ -609,6 +628,15 @@ def delete(j):
     shutil.rmtree(jdir(j), ignore_errors=True); STATE.pop(j, None); return jsonify({'ok': True})
 
 if __name__ == '__main__':
-    import webbrowser
-    threading.Timer(1.5, lambda: webbrowser.open('http://localhost:7860')).start()
+    import webbrowser, socket
+    if sys.stdout is None or 'pythonw' in os.path.basename(sys.executable).lower():
+        log = open(os.path.join(ROOT, 'vidub.log'), 'a', encoding='utf-8', buffering=1)
+        sys.stdout = sys.stderr = log
+    s = socket.socket()
+    try: s.bind(('127.0.0.1', 7860)); s.close()
+    except OSError:  # already running -> just open the page
+        webbrowser.open('http://localhost:7860'); sys.exit(0)
+    if not os.environ.get('VIDUB_NO_BROWSER'):
+        threading.Timer(1.5, lambda: webbrowser.open('http://localhost:7860')).start()
+    print(time.strftime('%Y-%m-%d %H:%M:%S'), 'ViDub', VERSION, 'started')
     app.run(host='127.0.0.1', port=7860, threaded=True)
