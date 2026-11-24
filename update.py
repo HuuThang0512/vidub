@@ -22,7 +22,12 @@ def current_version():
 def latest_version():
     if not REPO: return None
     import time
-    return _get(f'https://raw.githubusercontent.com/{REPO}/{BRANCH}/VERSION?t={int(time.time())}', 15).decode().strip()
+    try:  # GitHub API: no CDN cache, shows a new version immediately
+        req = urllib.request.Request(f'https://api.github.com/repos/{REPO}/contents/VERSION?ref={BRANCH}',
+                                     headers={'User-Agent': 'ViDub-updater', 'Accept': 'application/vnd.github.raw'})
+        with urllib.request.urlopen(req, timeout=15) as r: return r.read().decode().strip()
+    except Exception:  # rate-limited / offline -> raw CDN (may lag ~5 min)
+        return _get(f'https://raw.githubusercontent.com/{REPO}/{BRANCH}/VERSION?t={int(time.time())}', 15).decode().strip()
 
 def apply():
     if not REPO: raise RuntimeError('Chưa cấu hình nguồn cập nhật (file REPO)')
