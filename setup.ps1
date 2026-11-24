@@ -53,7 +53,8 @@ $env:PATH = "$Root\tools\ffmpeg\bin;$env:PATH"
 & "$Root\.venv\Scripts\python.exe" -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8'); print('  Whisper OK')"
 & "$Root\.venv\Scripts\python.exe" -c "import sys; sys.path.insert(0, r'$Root'); import engine_vieneu as e; print('  VieNeu OK -', len(e.list_voices()), 'giong')"
 
-# Desktop shortcut
+# Desktop shortcut (skip with VIDUB_NO_SHORTCUT=1, used for testing)
+if (-not $env:VIDUB_NO_SHORTCUT) {
 $desk = [Environment]::GetFolderPath('Desktop')
 $ws = New-Object -ComObject WScript.Shell
 $lnk = $ws.CreateShortcut("$desk\ViDub.lnk")
@@ -61,6 +62,7 @@ $lnk.TargetPath = "$Root\ViDub.bat"
 $lnk.WorkingDirectory = $Root
 $lnk.IconLocation = "$env:SystemRoot\System32\imageres.dll,18"
 $lnk.Save()
+}
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Green
