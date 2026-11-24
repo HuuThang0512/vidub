@@ -101,12 +101,17 @@ def do_transcribe(j, model_size, lang):
     if key not in WHISPER:
         try:
             mm = WhisperModel(model_size, device='cuda', compute_type='float16')
-            list(mm.transcribe(wav, language='en', clip_timestamps=[0, 2])[0])  # generator is lazy: force a real GPU run
+            import numpy as np
+            list(mm.transcribe(np.zeros(32000, dtype=np.float32), language='en')[0])  # generator is lazy: force a real GPU run
             WHISPER[key] = mm
         except Exception:
             WHISPER[key] = WhisperModel(model_size, device='cpu', compute_type='int8')
     m = WHISPER[key]
-    segs_iter, info = m.transcribe(wav, language=(lang or None), vad_filter=True, word_timestamps=True)
+    # decode the 16k mono wav ourselves (avoids PyAV version incompatibilities in faster-whisper)
+    import numpy as np
+    with wave.open(wav) as wf:
+        pcm = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+    segs_iter, info = m.transcribe(pcm, language=(lang or None), vad_filter=True, word_timestamps=True)
     words = []
     for s in segs_iter:
         check(j)
@@ -285,15 +290,19 @@ def split_items(items, maxc):
             out.append((x, y, c)); x = y
     return out
 
-def blur_vf(opt):
+def blur_vf(opt, vh):
     bl = opt.get('blur') or {}
     if not bl.get('on'): return ''
     h = max(2, min(60, float(bl.get('height', 12)))) / 100
     pos = max(0, min(95, float(bl.get('bottom', 4)))) / 100
-    st = int(bl.get('strength', 35))
-    y = f'ih*{max(0.0, 1 - pos - h):.4f}'
-    return (f"split[v0][v1];[v1]crop=iw:trunc(ih*{h:.4f}/2)*2:0:trunc({y}/2)*2,boxblur={st}:2[bl];"
-            f"[v0][bl]overlay=0:trunc(H*{max(0.0, 1 - pos - h):.4f}/2)*2,")
+    top = max(0.0, 1 - pos - h)
+    ch = max(4, int(vh * h) // 2 * 2)            # band height in px (even)
+    y = int(vh * top) // 2 * 2
+    # boxblur radius must be <= half of the plane size (chroma plane is half height for yuv420)
+    lr = max(1, min(int(bl.get('strength', 35)), ch // 2 - 1))
+    cr = max(1, min(lr, ch // 4 - 1))
+    return (f"split[v0][v1];[v1]crop=iw:{ch}:0:{y},boxblur=luma_radius={lr}:luma_power=2:chroma_radius={cr}:chroma_power=2[bl];"
+            f"[v0][bl]overlay=0:{y},")
 
 def srt_time(x):
     ms = int(round(x * 1000)); return f'{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}'
@@ -416,7 +425,7 @@ def do_render(j, opt):
                 '-map', '0:v', '-map', '[aout]']
     else:
         cmd += ['-map', '0:v', '-map', '0:a?']
-    vf = blur_vf(opt) + ('ass=subs.ass' if burn else '')
+    vf = blur_vf(opt, h) + ('ass=subs.ass' if burn else '')
     vf = vf.rstrip(',')
     if vf: cmd += ['-vf', vf, '-c:v', 'libx264', '-crf', '21', '-preset', 'fast']
     else: cmd += ['-c:v', 'copy']
@@ -582,7 +591,7 @@ def preview(j):
     first = split_sub(text, int(st.get('maxChars', 42)) * int(st.get('maxLines', 2)))[0]
     build_ass(ass, [(0, 100, first)], st, m['width'], m['height'])
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(t), '-i', 'input.mp4', '-frames:v', '1', '-vf',
-                    'setpts=PTS-STARTPTS,' + blur_vf(body) + 'ass=preview.ass', 'preview.jpg'], cwd=d, check=True)
+                    'setpts=PTS-STARTPTS,' + blur_vf(body, m['height']) + 'ass=preview.ass', 'preview.jpg'], cwd=d, check=True)
     return send_file(os.path.join(d, 'preview.jpg'), mimetype='image/jpeg', max_age=0)
 
 @app.get('/api/job/<j>/file/<name>')
