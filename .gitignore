@@ -1,0 +1,12 @@
+# user data - NEVER commit
+config.json
+jobs/
+# installed runtime
+.venv/
+tools/
+models/
+uv/
+__pycache__/
+*.pyc
+_*
+*.log

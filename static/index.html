@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ViDub — Sub & lồng tiếng video</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--panel2:#1e222b;--line:#2a2f3a;--fg:#e8eaf0;--mut:#8b93a7;--acc:#ff7a45;--acc2:#ffb08f;--good:#3ecf8e;--bad:#ff5d5d;--r:10px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font-size:18px;margin:0;letter-spacing:.3px}
+header h1 b{color:var(--acc)}
+header .sp{flex:1}
+select,input,textarea,button{font:inherit;color:inherit}
+.wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,1fr);gap:18px;padding:18px 20px;max-width:1500px;margin:auto}
+@media(max-width:980px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--mut);margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.card h2 .n{background:var(--acc);color:#111;border-radius:50%;width:20px;height:20px;display:inline-grid;place-items:center;font-size:12px;font-weight:700}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:110px;flex:1}
+.f label{font-size:12px;color:var(--mut)}
+input[type=text],input[type=password],input[type=number],select,textarea{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);padding:2px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#141414;font-weight:600}
+button.pri:hover{background:var(--acc2)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:26px;text-align:center;color:var(--mut);cursor:pointer;transition:.15s}
+.drop.on,.drop:hover{border-color:var(--acc);color:var(--fg)}
+.stage{position:relative;background:#000;border-radius:var(--r);overflow:hidden;aspect-ratio:16/9;container-type:size}
+.stage video,.stage img{width:100%;height:100%;object-fit:contain;display:block}
+.ov{position:absolute;left:6%;right:6%;text-align:center;pointer-events:none;display:flex;justify-content:center}
+.ov span{display:inline;white-space:pre-wrap;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.status{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut);min-height:22px}
+.bar{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;flex:1}
+.bar i{display:block;height:100%;background:var(--acc);width:0;transition:width .3s}
+.err{color:var(--bad)}
+.ok{color:var(--good)}
+.tbl{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%}
+td,th{border-bottom:1px solid var(--line);padding:5px 7px;vertical-align:top;font-size:13px}
+th{position:sticky;top:0;background:var(--panel2);text-align:left;color:var(--mut);font-weight:500;z-index:1}
+td.t{font-variant-numeric:tabular-nums;color:var(--mut);white-space:nowrap;cursor:pointer;width:62px}
+td.t:hover{color:var(--acc)}
+td.s{color:var(--mut);width:42%}
+tr.cur td{background:#2a1f1a}
+td textarea{background:transparent;border:1px solid transparent;resize:vertical;min-height:34px;padding:3px 5px}
+td textarea:focus{border-color:var(--acc);background:var(--panel2);outline:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:7px 12px}
+.seg button.on{background:var(--acc);color:#111}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.jobs{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.jobs button{font-size:12px;padding:4px 9px}
+.jobs button.on{border-color:var(--acc);color:var(--acc)}
+.muted{color:var(--mut);font-size:12px}
+.hide{display:none!important}
+.val{font-variant-numeric:tabular-nums;color:var(--acc2)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button.on{border-color:var(--acc);color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Vi<b>Dub</b></h1><span class="muted">Phụ đề + lồng tiếng video, chạy trên máy anh</span>
+  <span class="sp"></span>
+  <span class="muted" id="verInfo"></span>
+  <button id="btnUpdate" class="hide pri" onclick="doUpdate()" style="padding:5px 12px">⬆ Cập nhật bản mới</button>
+  <span class="muted" id="keyInfo"></span>
+</header>
+
+<div class="wrap">
+<!-- LEFT -->
+<div>
+  <div class="card">
+    <div class="tabs">
+      <button id="tabIn" class="on" onclick="showTab('in')">Video gốc + xem trước sub</button>
+      <button id="tabOut" onclick="showTab('out')" disabled>Kết quả</button>
+      <button onclick="realPreview()" id="btnFrame" disabled title="Render 1 khung hình thật bằng ffmpeg">📸 Khung hình thật</button>
+    </div>
+    <div class="stage" id="stage">
+      <video id="vid" controls></video>
+      <img id="frame" class="hide">
+      <div id="blurBand" class="hide" style="position:absolute;left:0;right:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);outline:1px dashed rgba(255,122,69,.7);pointer-events:none"></div>
+      <div class="ov" id="ov"><span id="ovText">Phụ đề xem thử sẽ hiện ở đây</span></div>
+    </div>
+    <div class="status" style="margin-top:10px"><span id="stMsg">Chưa có video.</span></div>
+    <div class="status"><div class="bar"><i id="stBar"></i></div><span id="stPct" class="val"></span><button id="btnCancel" class="hide" onclick="cancelJob()" style="padding:4px 12px;border-color:var(--bad);color:var(--bad)">⛔ Hủy</button></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span> Bảng phụ đề — sửa trực tiếp, bấm thời gian để tua</h2>
+    <div class="row">
+      <button onclick="saveSegs()" id="btnSave" disabled>💾 Lưu chỉnh sửa</button>
+      <span class="muted" id="segInfo"></span>
+    </div>
+    <div class="tbl"><table><thead><tr><th>Lúc</th><th>Gốc</th><th>Bản dịch (sửa được)</th></tr></thead><tbody id="segBody"><tr><td colspan=3 class="muted">Chưa có dữ liệu</td></tr></tbody></table></div>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div>
+  <div class="card">
+    <h2><span class="n">1</span> Video</h2>
+    <div class="drop" id="drop">Kéo thả video vào đây hoặc <u>bấm để chọn</u><br><span class="muted">mp4, mov, mkv, webm…</span></div>
+    <input type="file" id="file" accept="video/*" class="hide">
+    <div class="row" style="margin-top:10px">
+      <div class="f"><label>Model nhận giọng (Whisper)</label>
+        <select id="wModel"><option value="base">base — nhanh</option><option value="small" selected>small — cân bằng</option><option value="medium">medium — chính xác, chậm</option><option value="large-v3">large-v3 — chính xác nhất, rất chậm</option></select></div>
+      <div class="f"><label>Ngôn ngữ gốc</label>
+        <select id="wLang"><option value="" selected>Tự nhận</option><option value="en">Tiếng Anh</option><option value="ja">Nhật</option><option value="ko">Hàn</option><option value="zh">Trung</option><option value="fr">Pháp</option></select></div>
+      <button onclick="retranscribe()" id="btnRetr" disabled>Nhận lại</button>
+    </div>
+    <div class="jobs" id="jobs"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span> Dịch</h2>
+    <div class="row">
+      <div class="f" style="flex:2"><label>Google API key <span id="keySaved" class="muted"></span></label>
+        <input type="password" id="key" placeholder="AIza… (để trống nếu đã lưu)"></div>
+      <button onclick="saveKey()">Lưu key</button>
+    </div>
+    <div class="row">
+      <div class="f"><label>Dịch bằng</label>
+        <select id="prov"><option value="auto">Tự động (Gemini → Cloud)</option><option value="gemini">Gemini (AI, hay hơn)</option><option value="cloud">Cloud Translation</option></select></div>
+      <div class="f"><label>Model Gemini</label>
+        <select id="gModel"><option>gemini-2.5-flash</option></select></div>
+      <button onclick="loadModels()" title="Lấy danh sách model theo key">↻</button>
+    </div>
+    <div class="row">
+      <div class="f"><label>Dịch sang</label>
+        <select id="target"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="zh-CN">中文</option><option value="th">ไทย</option></select></div>
+      <div class="f" style="flex:2"><label>Bối cảnh (giúp AI dịch đúng thuật ngữ)</label>
+        <input type="text" id="ctx" placeholder="VD: khóa học về AI evals, xưng 'bạn'"></div>
+    </div>
+    <div class="row">
+      <button class="pri" onclick="translate_()" id="btnTr" disabled>Dịch tất cả</button>
+      <button onclick="translate_(true)" id="btnTr2" disabled>Chỉ dịch câu còn trống</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span> Giọng đọc</h2>
+    <div class="row">
+      <div class="f"><label>Ngôn ngữ giọng</label><select id="vLocale"></select></div>
+      <div class="f" style="flex:2"><label>Giọng</label><select id="voice"></select></div>
+    </div>
+    <p class="muted" id="engineNote" style="margin:0 0 10px"></p>
+    <div class="row">
+      <div class="f"><label>Tốc độ <span class="val" id="rateV">+0%</span></label><input type="range" id="rate" min="-30" max="50" value="5"></div>
+      <div class="f"><label>Cao độ <span class="val" id="pitchV">+0Hz</span></label><input type="range" id="pitch" min="-30" max="30" value="0"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>Âm lượng tiếng gốc <span class="val" id="bgV"></span></label><input type="range" id="bgVol" min="0" max="100" value="15"></div>
+      <div class="f"><label>Tăng tốc tối đa khi câu dài <span class="val" id="msV"></span></label><input type="range" id="maxSpeed" min="1" max="2" step="0.05" value="1.6"></div>
+    </div>
+    <div class="row">
+      <div class="f" style="flex:3"><input type="text" id="sampleText" value="Xin chào anh Thắng, đây là giọng đọc thử của ViDub."></div>
+      <button onclick="sample()" id="btnSample">▶ Nghe thử</button>
+    </div>
+    <audio id="aud" class="hide" controls style="width:100%;height:36px"></audio>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">5</span> Kiểu phụ đề</h2>
+    <div class="row">
+      <div class="f"><label>Font</label>
+        <select id="font"><option>Arial</option><option>Segoe UI</option><option>Tahoma</option><option>Verdana</option><option>Times New Roman</option><option>Roboto</option><option>Be Vietnam Pro</option><option>Montserrat</option></select></div>
+      <div class="f"><label>Cỡ chữ <span class="val" id="sizeV"></span></label><input type="range" id="size" min="2.5" max="10" step="0.1" value="5"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>Màu chữ</label><input type="color" id="color" value="#ffffff"></div>
+      <div class="f"><label>Kiểu nền</label>
+        <div class="seg"><button id="mOutline" class="on" onclick="setMode('outline')">Viền chữ</button><button id="mBox" onclick="setMode('box')">Hộp nền</button></div></div>
+    </div>
+    <div class="row" id="outlineRow">
+      <div class="f"><label>Màu viền</label><input type="color" id="outlineColor" value="#000000"></div>
+      <div class="f"><label>Độ dày viền <span class="val" id="owV"></span></label><input type="range" id="outlineWidth" min="0" max="6" step="0.5" value="2"></div>
+      <div class="f"><label>Bóng <span class="val" id="shV"></span></label><input type="range" id="shadow" min="0" max="5" step="0.5" value="1"></div>
+    </div>
+    <div class="row hide" id="boxRow">
+      <div class="f"><label>Màu nền</label><input type="color" id="bg" value="#000000"></div>
+      <div class="f"><label>Độ đậm nền <span class="val" id="boV"></span></label><input type="range" id="bgOpacity" min="0" max="1" step="0.05" value="0.6"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>Vị trí</label>
+        <select id="position"><option value="bottom">Dưới</option><option value="middle">Giữa</option><option value="top">Trên</option></select></div>
+      <div class="f"><label>Cách mép <span class="val" id="mgV"></span></label><input type="range" id="margin" min="0" max="30" step="0.5" value="6"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>Tối đa ký tự / dòng <span class="val" id="mcV"></span></label><input type="range" id="maxChars" min="20" max="70" value="42"></div>
+      <div class="f"><label>Số dòng tối đa <span class="val" id="mlV"></span></label><input type="range" id="maxLines" min="1" max="3" value="2"></div>
+    </div>
+    <p class="muted" style="margin:-4px 0 10px">Câu dài hơn sẽ được tự chia thành nhiều phụ đề hiện lần lượt, khớp theo giọng đọc.</p>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="blurOn"> Làm mờ phụ đề gốc trong video</label>
+    </div>
+    <div class="row hide" id="blurRow">
+      <div class="f"><label>Vị trí dải mờ (từ đáy) <span class="val" id="bbV"></span></label><input type="range" id="blurBottom" min="0" max="80" step="0.5" value="4"></div>
+      <div class="f"><label>Chiều cao dải <span class="val" id="bhV"></span></label><input type="range" id="blurHeight" min="3" max="40" step="0.5" value="12"></div>
+      <div class="f"><label>Độ mờ <span class="val" id="bsV"></span></label><input type="range" id="blurStrength" min="5" max="60" value="35"></div>
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="bold" checked> Chữ đậm</label>
+      <label class="chk"><input type="checkbox" id="italic"> Nghiêng</label>
+      <label class="chk"><input type="checkbox" id="upper"> VIẾT HOA</label>
+      <span class="sp" style="flex:1"></span>
+      <div class="f" style="min-width:150px;flex:0"><select id="preset" onchange="applyPreset(this.value)">
+        <option value="">— Mẫu có sẵn —</option><option value="classic">Trắng viền đen</option><option value="yellow">Vàng viền đen</option><option value="box">Hộp đen mờ</option><option value="tiktok">TikTok (hộp trắng chữ đen)</option><option value="netflix">Netflix (bóng mềm)</option></select></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">6</span> Xuất video</h2>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="dub" checked> Lồng tiếng</label>
+      <label class="chk"><input type="checkbox" id="burn" checked> In phụ đề vào hình</label>
+    </div>
+    <div class="row">
+      <button class="pri" onclick="render()" id="btnRender" disabled>🎬 Xuất video</button>
+      <a id="dlMp4" class="hide"><button>⬇ Tải MP4</button></a>
+      <a id="dlSrt" class="hide"><button>⬇ Tải .srt</button></a>
+    </div>
+    <p class="muted" style="margin:0">Giọng VieNeu chạy offline trên máy. Giọng Edge TTS cần internet; nếu dịch vụ giới hạn lượt gọi, app tự chờ và thử lại.</p>
+  </div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let JOB=null, SEGS=[], VOICES=[], MODE='outline', poll=null, META={};
+const api=async(u,o={})=>{const r=await fetch(u,{headers:{'Content-Type':'application/json'},...o});const t=r.headers.get('content-type')||'';const d=t.includes('json')?await r.json():r;if(!r.ok)throw new Error(d.error||r.statusText);return d};
+const post=(u,b)=>api(u,{method:'POST',body:JSON.stringify(b||{})});
+const fmt=s=>{s=+s;const m=Math.floor(s/60);return m+':'+String(Math.floor(s%60)).padStart(2,'0')};
+
+// ---------- settings persistence ----------
+const SET_IDS=['wModel','wLang','prov','gModel','target','ctx','vLocale','voice','rate','pitch','bgVol','maxSpeed','font','size','color','outlineColor','outlineWidth','shadow','bg','bgOpacity','position','margin','bold','italic','upper','dub','burn','maxChars','maxLines','blurOn','blurBottom','blurHeight','blurStrength'];
+function saveSettings(){const o={mode:MODE};SET_IDS.forEach(i=>{const e=$(i);o[i]=e.type=='checkbox'?e.checked:e.value});localStorage.vidub=JSON.stringify(o)}
+function loadSettings(){try{const o=JSON.parse(localStorage.vidub||'{}');SET_IDS.forEach(i=>{if(o[i]===undefined)return;const e=$(i);if(e.type=='checkbox')e.checked=o[i];else if(e.tagName=='SELECT'&&![...e.options].some(x=>x.value==o[i])){const op=new Option(o[i],o[i]);e.add(op);e.value=o[i]}else e.value=o[i]});if(o.mode)setMode(o.mode,true)}catch(e){}}
+
+// ---------- style ----------
+function style(){return{font:$('font').value,size:+$('size').value,color:$('color').value,mode:MODE,outlineColor:$('outlineColor').value,outlineWidth:+$('outlineWidth').value,shadow:+$('shadow').value,bg:$('bg').value,bgOpacity:+$('bgOpacity').value,position:$('position').value,margin:+$('margin').value,bold:$('bold').checked,italic:$('italic').checked,upper:$('upper').checked,maxChars:+$('maxChars').value,maxLines:+$('maxLines').value}}
+function blurOpt(){return{on:$('blurOn').checked,bottom:+$('blurBottom').value,height:+$('blurHeight').value,strength:+$('blurStrength').value}}
+function firstChunk(t){const mc=+$('maxChars').value*+$('maxLines').value;t=(t||'').trim();if(t.length<=mc)return t;const m=t.slice(0,mc+1);let k=Math.max(m.search(/[.!?…。！？][^.!?…。！？]*$/),-1);if(k<mc*0.4)k=Math.max(m.lastIndexOf(', '),m.lastIndexOf('，'));if(k<mc*0.4)k=m.lastIndexOf(' ');return t.slice(0,k>0?k+1:mc).trim()}
+function setMode(m,quiet){MODE=m;$('mOutline').classList.toggle('on',m=='outline');$('mBox').classList.toggle('on',m=='box');$('outlineRow').classList.toggle('hide',m!='outline');$('boxRow').classList.toggle('hide',m!='box');if(!quiet)upd()}
+function hexA(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16},${n>>8&255},${n&255},${a})`}
+function upd(){
+  const s=style(),ov=$('ov'),sp=$('ovText'),H=$('stage').clientHeight||300;
+  // video occupies the letterboxed area; approximate using real aspect
+  const ar=META.width&&META.height?META.width/META.height:16/9, W=$('stage').clientWidth, vh=Math.min(H,W/ar);
+  const px=s.size/100*vh, k=vh/720;
+  sp.style.fontFamily=`"${s.font}",Arial`;sp.style.fontSize=px+'px';sp.style.color=s.color;sp.style.fontWeight=s.bold?700:400;sp.style.fontStyle=s.italic?'italic':'normal';sp.style.textTransform=s.upper?'uppercase':'none';sp.style.lineHeight=1.25;
+  if(s.mode=='box'){sp.style.background=hexA(s.bg,s.bgOpacity);sp.style.padding=`${px*.12}px ${px*.25}px`;sp.style.textShadow='none';sp.style.webkitTextStroke=''}
+  else{sp.style.background='none';sp.style.padding=0;const w=s.outlineWidth*k,c=s.outlineColor,sh=s.shadow*k;let t=[];if(w>0)for(let a=0;a<16;a++){const r=a/16*Math.PI*2;t.push(`${(Math.cos(r)*w).toFixed(1)}px ${(Math.sin(r)*w).toFixed(1)}px 0 ${c}`)}if(sh>0)t.push(`${sh+w}px ${sh+w}px ${sh}px rgba(0,0,0,.6)`);sp.style.textShadow=t.join(',')||'none'}
+  const off=(H-vh)/2, m=s.margin/100*vh;
+  const bo=blurOpt(),band=$('blurBand');band.classList.toggle('hide',!bo.on||$('tabOut').classList.contains('on'));$('blurRow').classList.toggle('hide',!bo.on);
+  band.style.height=(bo.height/100*vh)+'px';band.style.top='auto';band.style.bottom=(off+bo.bottom/100*vh)+'px';band.style.backdropFilter=band.style.webkitBackdropFilter=`blur(${bo.strength/3}px)`;
+  sp.style.display='inline-block';sp.style.maxWidth=(s.maxChars*px*0.55)+'px';
+  $('mcV').textContent=s.maxChars;$('mlV').textContent=s.maxLines;$('bbV').textContent=bo.bottom+'%';$('bhV').textContent=bo.height+'%';$('bsV').textContent=bo.strength;
+  ov.style.top=ov.style.bottom='auto';ov.style.transform='';
+  if(s.position=='bottom')ov.style.bottom=(off+m)+'px';else if(s.position=='top')ov.style.top=(off+m)+'px';else{ov.style.top='50%';ov.style.transform='translateY(-50%)'}
+  $('rateV').textContent=(+$('rate').value>=0?'+':'')+$('rate').value+'%';$('pitchV').textContent=(+$('pitch').value>=0?'+':'')+$('pitch').value+'Hz';
+  $('bgV').textContent=$('bgVol').value+'%';$('msV').textContent='×'+(+$('maxSpeed').value).toFixed(2);$('sizeV').textContent=s.size.toFixed(1)+'%';
+  $('owV').textContent=s.outlineWidth;$('shV').textContent=s.shadow;$('boV').textContent=Math.round(s.bgOpacity*100)+'%';$('mgV').textContent=s.margin+'%';
+  saveSettings();
+}
+const PRESETS={classic:{color:'#ffffff',mode:'outline',outlineColor:'#000000',outlineWidth:2,shadow:1,bold:true},yellow:{color:'#ffe14d',mode:'outline',outlineColor:'#000000',outlineWidth:2.5,shadow:1,bold:true},box:{color:'#ffffff',mode:'box',bg:'#000000',bgOpacity:.6,bold:false},tiktok:{color:'#111111',mode:'box',bg:'#ffffff',bgOpacity:1,bold:true},netflix:{color:'#ffffff',mode:'outline',outlineColor:'#000000',outlineWidth:.5,shadow:3,bold:false,font:'Segoe UI'}};
+function applyPreset(p){const o=PRESETS[p];if(!o)return;for(const[k,v]of Object.entries(o)){if(k=='mode')setMode(v,true);else{const e=$(k);if(e.type=='checkbox')e.checked=v;else e.value=v}}$('preset').value='';upd()}
+
+// ---------- status ----------
+function setStatus(st){
+  $('stMsg').innerHTML=st.error?`<span class="err">⚠ ${st.error}</span>`:(st.msg||'');
+  $('stBar').style.width=(st.progress||0)+'%';$('stPct').textContent=st.busy?(st.progress||0)+'%':'';
+  const busy=!!st.busy, has=!!JOB, hasS=SEGS.length>0, hasT=SEGS.some(s=>s.tgt);
+  $('btnCancel').classList.toggle('hide',!busy);$('btnCancel').disabled=false;
+  $('btnRetr').disabled=busy||!has;$('btnTr').disabled=$('btnTr2').disabled=busy||!hasS;$('btnRender').disabled=busy||!hasT;$('btnSave').disabled=!hasS;$('btnFrame').disabled=!has;
+}
+async function refresh(full){
+  if(!JOB)return;const d=await api('/api/job/'+JOB);META=d.meta;
+  if(full||!d.status.busy||d.status.step=='translate'||d.status.step=='transcribe'){if(full||JSON.stringify(d.segs)!==JSON.stringify(SEGS)){if(!document.activeElement||document.activeElement.tagName!='TEXTAREA'){SEGS=d.segs;drawSegs()}}}
+  setStatus(d.status);
+  $('tabOut').disabled=!d.hasOutput;
+  ['dlMp4','dlSrt'].forEach(i=>$(i).classList.toggle('hide',!d.hasOutput));
+  if(d.hasOutput){$('dlMp4').href=`/api/job/${JOB}/file/output.mp4?dl=1`;$('dlSrt').href=`/api/job/${JOB}/file/output.srt?dl=1`}
+  if(d.status.step=='done'&&d.status.busy===false&&window._rendering){window._rendering=false;showTab('out')}
+  clearTimeout(poll);if(d.status.busy)poll=setTimeout(refresh,1200);
+  upd();
+}
+function drawSegs(){
+  const b=$('segBody');
+  if(!SEGS.length){b.innerHTML='<tr><td colspan=3 class="muted">Chưa có dữ liệu</td></tr>';return}
+  b.innerHTML=SEGS.map((s,i)=>`<tr data-i="${i}"><td class="t" onclick="seek(${i})">${fmt(s.start)}</td><td class="s">${esc(s.src)}</td><td><textarea data-i="${i}" rows="2">${esc(s.tgt||'')}</textarea></td></tr>`).join('');
+  b.querySelectorAll('textarea').forEach(t=>t.oninput=()=>{SEGS[t.dataset.i].tgt=t.value;dirty=true;$('segInfo').textContent='Có thay đổi chưa lưu'});
+  $('segInfo').textContent=`${SEGS.length} câu · ${SEGS.filter(s=>s.tgt).length} đã dịch`;
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let dirty=false;
+async function saveSegs(){await post(`/api/job/${JOB}/segs`,{segs:SEGS});dirty=false;$('segInfo').textContent='Đã lưu ✓'}
+function seek(i){showTab('in');$('vid').currentTime=SEGS[i].start+.05;$('vid').play()}
+$('vid').addEventListener('timeupdate',()=>{
+  const t=$('vid').currentTime;let k=-1;for(let i=0;i<SEGS.length;i++){if(SEGS[i].start<=t&&t<(SEGS[i+1]?SEGS[i+1].start:1e9)){k=i;break}}
+  if(k>=0&&!$('tabOut').classList.contains('on')){const s=SEGS[k];$('ovText').textContent=firstChunk(s.tgt||s.src);document.querySelectorAll('#segBody tr').forEach(r=>r.classList.toggle('cur',r.dataset.i==k))}
+});
+
+// ---------- tabs ----------
+function showTab(t){
+  $('tabIn').classList.toggle('on',t=='in');$('tabOut').classList.toggle('on',t=='out');$('frame').classList.add('hide');$('vid').classList.remove('hide');
+  const src=t=='out'?`/api/job/${JOB}/file/output.mp4?v=${Date.now()}`:`/api/job/${JOB}/file/input.mp4`;
+  if(JOB&&!$('vid').src.includes(t=='out'?'output':'input'))$('vid').src=src;
+  $('ov').classList.toggle('hide',t=='out');
+}
+async function realPreview(){
+  const txt=$('ovText').textContent;$('stMsg').textContent='Đang render khung hình thật...';
+  const r=await fetch(`/api/job/${JOB}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({time:$('vid').currentTime||1,text:txt,style:style(),blur:blurOpt()})});
+  if(!r.ok){$('stMsg').innerHTML='<span class="err">Lỗi render preview</span>';return}
+  $('frame').src=URL.createObjectURL(await r.blob());$('frame').classList.remove('hide');$('vid').classList.add('hide');$('ov').classList.add('hide');
+  $('stMsg').textContent='Đây là khung hình thật (bấm tab "Video gốc" để quay lại).';
+}
+
+// ---------- upload ----------
+const drop=$('drop');
+drop.onclick=()=>$('file').click();
+// whole window is a drop target (so dropping on the player etc. never opens the file in the browser)
+window.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='copy';drop.classList.add('on')});
+window.addEventListener('dragleave',e=>{if(!e.relatedTarget)drop.classList.remove('on')});
+window.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('on');const f=[...(e.dataTransfer.files||[])].find(x=>/^video\/|\.(mp4|mov|mkv|webm|avi|m4v|flv|wmv)$/i.test(x.type||x.name));if(f)upload(f);else $('stMsg').innerHTML='<span class="err">⚠ File thả vào không phải video</span>'});
+$('file').onchange=e=>e.target.files[0]&&upload(e.target.files[0]);
+function upload(f){
+  const fd=new FormData();fd.append('file',f);fd.append('model',$('wModel').value);fd.append('lang',$('wLang').value);
+  const x=new XMLHttpRequest();x.open('POST','/api/upload');
+  x.upload.onprogress=e=>{$('stMsg').textContent='Đang tải lên '+f.name+'...';$('stBar').style.width=(e.loaded/e.total*100)+'%'};
+  x.onload=()=>{let d;try{d=JSON.parse(x.responseText)}catch(e){d={error:'Server lỗi khi nhận video ('+x.status+')'}}if(d.error){$('stMsg').innerHTML='<span class="err">⚠ '+esc(d.error)+'</span>';return}openJob(d.id);loadJobs()};
+  x.onerror=()=>offline();
+  x.send(fd);
+}
+async function openJob(id){JOB=id;SEGS=[];localStorage.vidubJob=id;showTab('in');$('vid').src=`/api/job/${id}/file/input.mp4`;await refresh(true);loadJobs()}
+async function loadJobs(){
+  const j=await api('/api/jobs');
+  $('jobs').innerHTML=j.slice(0,12).map(x=>`<button class="${x.id==JOB?'on':''}" onclick="openJob('${x.id}')" title="${esc(x.name||'')}">${x.done?'✅ ':''}${esc((x.name||x.id).slice(0,28))}</button>`).join('')+(JOB?` <button onclick="delJob()" title="Xóa dự án đang mở">🗑</button>`:'');
+}
+async function delJob(){if(!confirm('Xóa dự án này?'))return;await api('/api/job/'+JOB,{method:'DELETE'});JOB=null;SEGS=[];drawSegs();$('vid').removeAttribute('src');localStorage.removeItem('vidubJob');loadJobs()}
+async function retranscribe(){if(!confirm('Nhận lại giọng nói sẽ xóa bảng phụ đề hiện tại. Tiếp tục?'))return;await post(`/api/job/${JOB}/retranscribe`,{model:$('wModel').value,lang:$('wLang').value});refresh()}
+
+// ---------- translate ----------
+async function saveKey(){const k=$('key').value.trim();await post('/api/config',{key:k,model:$('gModel').value});$('key').value='';loadCfg();if(k)loadModels()}
+async function loadCfg(){const c=await api('/api/config');$('keySaved').textContent=c.hasKey?'(đã lưu '+c.keyHint+')':'';$('keyInfo').textContent=c.hasKey?'🔑 Key: '+c.keyHint:'🔑 Chưa có key'}
+async function loadModels(){
+  try{const d=await post('/api/models',{key:$('key').value.trim()});const sel=$('gModel'),cur=sel.value;
+    const pref=d.models.sort((a,b)=>(b.includes('flash')-a.includes('flash'))||b.localeCompare(a));
+    sel.innerHTML=pref.map(m=>`<option>${m}</option>`).join('');if(pref.includes(cur))sel.value=cur;
+    $('stMsg').innerHTML=`<span class="ok">Key Gemini hợp lệ — ${pref.length} model.</span>`}
+  catch(e){$('stMsg').innerHTML=`<span class="err">Không lấy được model Gemini: ${esc(e.message)}. Nếu key là Cloud Translation, chọn "Cloud Translation".</span>`}
+}
+async function translate_(onlyEmpty){
+  if(dirty)await saveSegs();
+  try{await post(`/api/job/${JOB}/translate`,{key:$('key').value.trim(),provider:$('prov').value,model:$('gModel').value,target:$('target').value,context:$('ctx').value,onlyEmpty:!!onlyEmpty});refresh()}
+  catch(e){$('stMsg').innerHTML=`<span class="err">${esc(e.message)}</span>`}
+}
+
+// ---------- voices ----------
+async function loadVoices(){
+  VOICES=await api('/api/voices');
+  const rank=l=>l.includes('VieNeu')?2:l=='vi-VN'?1:0;
+  const locs=[...new Set(VOICES.map(v=>v.locale))].sort((a,b)=>rank(b)-rank(a)||a.localeCompare(b));
+  const lbl=l=>l.includes('VieNeu')?'🦜 Tiếng Việt — VieNeu (offline, tự nhiên)':l=='vi-VN'?'Tiếng Việt — Edge TTS (online)':l;
+  const saved=JSON.parse(localStorage.vidub||'{}').vLocale;
+  const want=locs.includes(saved)?saved:locs[0];
+  $('vLocale').innerHTML=locs.map(l=>`<option value="${l}">${lbl(l)}</option>`).join('');$('vLocale').value=want;
+  fillVoices(JSON.parse(localStorage.vidub||'{}').voice);
+}
+function fillVoices(keep){
+  const l=$('vLocale').value,vs=VOICES.filter(v=>v.locale==l);
+  $('voice').innerHTML=vs.map(v=>`<option value="${esc(v.id)}">${v.engine=='vieneu'?esc(v.name):v.id.split('-').slice(2).join('-').replace('Neural','')+' — '+(v.gender=='Male'?'Nam':'Nữ')}</option>`).join('');
+  if(keep&&vs.some(v=>v.id==keep))$('voice').value=keep;else{const nm=vs.find(v=>/NamMinh|vieneu:Adam$/.test(v.id));if(nm)$('voice').value=nm.id}
+  $('engineNote').textContent=l.includes('VieNeu')?'VieNeu chạy offline trên máy, không bị giới hạn lượt gọi. Lần đầu dùng mất ~10–60 giây để tải model.':'Edge TTS cần internet, đôi khi bị giới hạn lượt gọi (app tự chờ và thử lại).';
+  saveSettings();
+}
+$('vLocale').onchange=()=>fillVoices();
+async function sample(){
+  $('btnSample').disabled=true;$('btnSample').textContent='…';
+  try{const r=await fetch('/api/voice-sample',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:$('sampleText').value,voice:$('voice').value,rate:$('rate').value,pitch:$('pitch').value})});
+    if(!r.ok){let m='TTS lỗi';try{m=(await r.json()).error||m}catch(e){}throw new Error(m)}$('aud').src=URL.createObjectURL(await r.blob());$('aud').classList.remove('hide');$('aud').play().catch(()=>{})}
+  catch(e){if(String(e).includes('fetch'))offline();else $('stMsg').innerHTML='<span class="err">Không đọc thử được: '+e.message+'</span>'}
+  $('btnSample').disabled=false;$('btnSample').textContent='▶ Nghe thử';
+}
+
+// ---------- render ----------
+async function render(){
+  if(dirty)await saveSegs();window._rendering=true;
+  await post(`/api/job/${JOB}/render`,{voice:$('voice').value,rate:+$('rate').value,pitch:+$('pitch').value,bgVolume:+$('bgVol').value,maxSpeed:+$('maxSpeed').value,dub:$('dub').checked,burn:$('burn').checked,style:style(),blur:blurOpt()});
+  refresh();
+}
+
+function offline(){$('stMsg').innerHTML='<span class="err">⚠ Không kết nối được ViDub. Mở lại shortcut ViDub trên Desktop và giữ cửa sổ đen đó mở trong lúc dùng.</span>'}
+window.addEventListener('unhandledrejection',e=>{const m=String(e.reason&&e.reason.message||e.reason);if(m.includes('Failed to fetch'))offline();else $('stMsg').innerHTML='<span class="err">⚠ '+esc(m)+'</span>'});
+setInterval(()=>fetch('/api/config').catch(offline),5000);
+async function cancelJob(){
+  $('btnCancel').disabled=true;$('stMsg').textContent='Đang hủy...';window._rendering=false;
+  try{await post(`/api/job/${JOB}/cancel`)}catch(e){}
+  setTimeout(refresh,800);
+}
+async function checkUpdate(){
+  try{const v=await api('/api/version');$('verInfo').textContent='Phiên bản '+v.current;
+    if(v.canUpdate){$('btnUpdate').classList.remove('hide');$('btnUpdate').textContent='⬆ Cập nhật '+v.latest}}catch(e){}
+}
+async function doUpdate(){
+  if(!confirm('Tải bản mới và khởi động lại ViDub? Dự án và key của anh vẫn được giữ nguyên.'))return;
+  $('btnUpdate').disabled=true;$('btnUpdate').textContent='Đang cập nhật...';
+  try{const r=await post('/api/update');$('stMsg').innerHTML='<span class="ok">'+esc(r.msg)+' — đang khởi động lại, trang sẽ tự tải lại...</span>';
+    setTimeout(function w(){fetch('/api/version').then(()=>location.reload()).catch(()=>setTimeout(w,1500))},6000)}
+  catch(e){$('stMsg').innerHTML='<span class="err">⚠ '+esc(e.message)+'</span>';$('btnUpdate').disabled=false}
+}
+// ---------- init ----------
+document.querySelectorAll('input,select').forEach(e=>{if(!['file','key','sampleText'].includes(e.id))e.addEventListener('input',upd)});
+new ResizeObserver(upd).observe($('stage'));
+loadSettings();loadCfg();checkUpdate();loadVoices().catch(()=>{});loadJobs().then(()=>{if(localStorage.vidubJob)openJob(localStorage.vidubJob).catch(()=>localStorage.removeItem('vidubJob'))});
+upd();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+flask>=3.0
+faster-whisper>=1.0
+google-genai>=1.0
+requests>=2.31
+edge-tts>=7.0
+vieneu>=3.8
