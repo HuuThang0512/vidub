@@ -181,7 +181,9 @@ def tr_cloud(key, texts, target_code):
 def explain_key_error(svc, e):
     s = str(e)
     hint = ''
-    if 'API_KEY_INVALID' in s or 'API key not valid' in s: hint = 'Key sai hoặc đã bị xóa. Tạo key mới tại aistudio.google.com/app/apikey'
+    if 'API keys are not supported' in s or ('401' in s and svc.startswith('Cloud')):
+        hint = 'Key AI Studio (bắt đầu bằng AQ.) chỉ dùng được cho Gemini. Ở ô "Dịch bằng" hãy chọn Gemini'
+    elif 'API_KEY_INVALID' in s or 'API key not valid' in s: hint = 'Key sai hoặc đã bị xóa. Tạo key mới tại aistudio.google.com/app/apikey'
     elif 'PERMISSION_DENIED' in s or '403' in s: hint = 'Key chưa được phép dùng dịch vụ này. Hãy tạo key tại aistudio.google.com/app/apikey (không phải Cloud Console)'
     elif 'RESOURCE_EXHAUSTED' in s or '429' in s: hint = 'Hết hạn mức miễn phí tạm thời, chờ 1 phút rồi thử lại hoặc chọn model flash-lite'
     elif 'FAILED_PRECONDITION' in s or 'location' in s.lower(): hint = 'Gemini miễn phí không hỗ trợ khu vực/tài khoản này, cần bật billing'
@@ -194,6 +196,8 @@ def do_translate(j, key, provider, model, target, context, only_empty):
     segs = get_segs(j)
     idx = [i for i, s in enumerate(segs) if not (only_empty and s.get('tgt'))]
     status(j, step='translate', progress=0, msg='Đang dịch...')
+    if key.startswith('AQ.') and provider in ('auto', 'cloud'):
+        provider = 'gemini'  # new-style AI Studio keys are Gemini-only (Cloud Translation rejects them with 401)
     used = provider
     gem_err = None
     B = 40
