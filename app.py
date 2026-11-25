@@ -178,6 +178,16 @@ def tr_cloud(key, texts, target_code):
     import html
     return [html.unescape(t['translatedText']) for t in r.json()['data']['translations']]
 
+def explain_key_error(svc, e):
+    s = str(e)
+    hint = ''
+    if 'API_KEY_INVALID' in s or 'API key not valid' in s: hint = 'Key sai hoặc đã bị xóa. Tạo key mới tại aistudio.google.com/app/apikey'
+    elif 'PERMISSION_DENIED' in s or '403' in s: hint = 'Key chưa được phép dùng dịch vụ này. Hãy tạo key tại aistudio.google.com/app/apikey (không phải Cloud Console)'
+    elif 'RESOURCE_EXHAUSTED' in s or '429' in s: hint = 'Hết hạn mức miễn phí tạm thời, chờ 1 phút rồi thử lại hoặc chọn model flash-lite'
+    elif 'FAILED_PRECONDITION' in s or 'location' in s.lower(): hint = 'Gemini miễn phí không hỗ trợ khu vực/tài khoản này, cần bật billing'
+    elif 'NOT_FOUND' in s or '404' in s: hint = 'Model không tồn tại, bấm ↻ để chọn model khác'
+    return f'{svc} lỗi: {hint or s[:200]}' + (f'  (chi tiết: {s[:120]})' if hint else '')
+
 LANGS = {'vi': 'Vietnamese', 'en': 'English', 'ja': 'Japanese', 'ko': 'Korean', 'zh-CN': 'Simplified Chinese', 'fr': 'French', 'th': 'Thai'}
 
 def do_translate(j, key, provider, model, target, context, only_empty):
@@ -185,6 +195,7 @@ def do_translate(j, key, provider, model, target, context, only_empty):
     idx = [i for i, s in enumerate(segs) if not (only_empty and s.get('tgt'))]
     status(j, step='translate', progress=0, msg='Đang dịch...')
     used = provider
+    gem_err = None
     B = 40
     for b in range(0, len(idx), B):
         check(j)
@@ -193,9 +204,14 @@ def do_translate(j, key, provider, model, target, context, only_empty):
         if provider in ('auto', 'gemini'):
             try: res = tr_gemini(key, model or 'gemini-2.5-flash', texts, LANGS.get(target, target), context); used = 'gemini'
             except Exception as e:
-                if provider == 'gemini': raise RuntimeError('Gemini lỗi: ' + str(e)[:300])
+                if provider == 'gemini': raise RuntimeError(explain_key_error('Gemini', e))
+                gem_err = e
                 status(j, msg=f'Gemini không dùng được ({str(e)[:80]}), chuyển sang Cloud Translation...')
-        if res is None: res = tr_cloud(key, texts, target); used = 'cloud'
+        if res is None:
+            try: res = tr_cloud(key, texts, target); used = 'cloud'
+            except Exception as e:
+                if gem_err is None: raise RuntimeError(explain_key_error('Cloud Translation', e))
+                raise RuntimeError(explain_key_error('Gemini', gem_err) + '  |  Cloud Translation: ' + str(e)[:120])
         for i, t in zip(part, res): segs[i]['tgt'] = t
         put_segs(j, segs)
         status(j, progress=int((b + len(part)) / max(1, len(idx)) * 100), msg=f'Đã dịch {b + len(part)}/{len(idx)} câu ({used})')
