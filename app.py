@@ -139,9 +139,22 @@ def do_transcribe(j, model_size, lang):
     status(j, step='transcribed', progress=100, msg=f'Xong: {len(out)} câu (ngôn ngữ: {info.language})')
 
 # ---------------- 2. translate ----------------
+def gclient(key):
+    """Gemini client pinned to v1beta (newer google-genai defaults to v1, where JSON mode is not available)."""
+    from google import genai
+    from google.genai import types
+    try: return genai.Client(api_key=key, http_options=types.HttpOptions(api_version='v1beta'))
+    except Exception: return genai.Client(api_key=key)
+
+def parse_json_array(txt):
+    txt = (txt or '').strip()
+    if txt.startswith('```'): txt = txt.strip('`').split('\n', 1)[-1].rsplit('```', 1)[0]
+    a, b = txt.find('['), txt.rfind(']')
+    return json.loads(txt[a:b + 1] if a >= 0 and b > a else txt)
+
 def gemini_models(key):
     from google import genai
-    c = genai.Client(api_key=key)
+    c = gclient(key)
     names = []
     for m in c.models.list():
         acts = getattr(m, 'supported_actions', None) or []
@@ -153,7 +166,7 @@ def gemini_models(key):
 def tr_gemini(key, model, texts, target, context):
     from google import genai
     from google.genai import types
-    c = genai.Client(api_key=key)
+    c = gclient(key)
     prompt = (f"Translate each subtitle line into natural, spoken {target} for a voice-over. "
               "Keep it concise (similar length to the source, it must be read aloud in the same time). "
               "Keep product names and common technical terms (API, prompt, token, model names, eval...) in English. "
@@ -161,9 +174,14 @@ def tr_gemini(key, model, texts, target, context):
               + (f"Context: {context}\n" if context else '') + "Lines:\n" + json.dumps(texts, ensure_ascii=False))
     for attempt in range(4):
         try:
-            r = c.models.generate_content(model=model, contents=prompt,
-                                          config=types.GenerateContentConfig(response_mime_type='application/json', temperature=0.3))
-            arr = json.loads(r.text)
+            try:
+                r = c.models.generate_content(model=model, contents=prompt,
+                                              config=types.GenerateContentConfig(response_mime_type='application/json', temperature=0.3))
+            except Exception as je:
+                if 'JSON mode' not in str(je) and 'response_mime_type' not in str(je): raise
+                r = c.models.generate_content(model=model, contents=prompt,  # fallback: plain text, parse the array ourselves
+                                              config=types.GenerateContentConfig(temperature=0.3))
+            arr = parse_json_array(r.text)
             if isinstance(arr, list) and len(arr) == len(texts): return [str(x) for x in arr]
             raise ValueError(f'Gemini trả về {len(arr)} dòng thay vì {len(texts)}')
         except Exception as e:
