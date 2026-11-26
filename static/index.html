@@ -223,6 +223,15 @@ td textarea:focus{border-color:var(--acc);background:var(--panel2);outline:none}
       <label class="chk"><input type="checkbox" id="burn" checked> In phụ đề vào hình</label>
     </div>
     <div class="row">
+      <div class="f"><label>Khung hình</label>
+        <select id="aspect"><option value="keep">Giữ nguyên như gốc</option><option value="16:9">16:9 — Ngang (YouTube)</option><option value="9:16">9:16 — Dọc (TikTok, Reels, Shorts)</option><option value="1:1">1:1 — Vuông</option><option value="4:5">4:5 — Facebook / Instagram</option></select></div>
+      <div class="f" id="fitBox"><label>Cách lấp khung</label>
+        <select id="fit"><option value="blur">Nền mờ phía sau</option><option value="crop">Cắt cho đầy khung</option><option value="pad">Viền đen</option></select></div>
+    </div>
+    <div class="row hide" id="cropRow">
+      <div class="f"><label>Giữ phần nào khi cắt <span class="val" id="cxV"></span></label><input type="range" id="cropX" min="0" max="100" value="50"></div>
+    </div>
+    <div class="row">
       <button class="pri" onclick="render()" id="btnRender" disabled>🎬 Xuất video</button>
       <a id="dlMp4" class="hide"><button>⬇ Tải MP4</button></a>
       <a id="dlSrt" class="hide"><button>⬇ Tải .srt</button></a>
@@ -240,12 +249,14 @@ const post=(u,b)=>api(u,{method:'POST',body:JSON.stringify(b||{})});
 const fmt=s=>{s=+s;const m=Math.floor(s/60);return m+':'+String(Math.floor(s%60)).padStart(2,'0')};
 
 // ---------- settings persistence ----------
-const SET_IDS=['wModel','wLang','prov','gModel','target','ctx','vLocale','voice','rate','pitch','bgVol','maxSpeed','font','size','color','outlineColor','outlineWidth','shadow','bg','bgOpacity','position','margin','bold','italic','upper','dub','burn','maxChars','maxLines','blurOn','blurBottom','blurHeight','blurStrength'];
+const SET_IDS=['wModel','wLang','prov','gModel','target','ctx','vLocale','voice','rate','pitch','bgVol','maxSpeed','font','size','color','outlineColor','outlineWidth','shadow','bg','bgOpacity','position','margin','bold','italic','upper','dub','burn','maxChars','maxLines','blurOn','blurBottom','blurHeight','blurStrength','aspect','fit','cropX'];
 function saveSettings(){const o={mode:MODE};SET_IDS.forEach(i=>{const e=$(i);o[i]=e.type=='checkbox'?e.checked:e.value});localStorage.vidub=JSON.stringify(o)}
 function loadSettings(){try{const o=JSON.parse(localStorage.vidub||'{}');SET_IDS.forEach(i=>{if(o[i]===undefined)return;const e=$(i);if(e.type=='checkbox')e.checked=o[i];else if(e.tagName=='SELECT'&&![...e.options].some(x=>x.value==o[i])){const op=new Option(o[i],o[i]);e.add(op);e.value=o[i]}else e.value=o[i]});if(o.mode)setMode(o.mode,true)}catch(e){}}
 
 // ---------- style ----------
 function style(){return{font:$('font').value,size:+$('size').value,color:$('color').value,mode:MODE,outlineColor:$('outlineColor').value,outlineWidth:+$('outlineWidth').value,shadow:+$('shadow').value,bg:$('bg').value,bgOpacity:+$('bgOpacity').value,position:$('position').value,margin:+$('margin').value,bold:$('bold').checked,italic:$('italic').checked,upper:$('upper').checked,maxChars:+$('maxChars').value,maxLines:+$('maxLines').value}}
+function frameOpt(){return{aspect:$('aspect').value,fit:$('fit').value,x:+$('cropX').value}}
+function outAR(){const a=$('aspect').value,src=META.width&&META.height?META.width/META.height:16/9;if(a=='keep')return src;const[p,q]=a.split(':').map(Number);return p/q}
 function blurOpt(){return{on:$('blurOn').checked,bottom:+$('blurBottom').value,height:+$('blurHeight').value,strength:+$('blurStrength').value}}
 function firstChunk(t){const mc=+$('maxChars').value*+$('maxLines').value;t=(t||'').trim();if(t.length<=mc)return t;const m=t.slice(0,mc+1);let k=Math.max(m.search(/[.!?…。！？][^.!?…。！？]*$/),-1);if(k<mc*0.4)k=Math.max(m.lastIndexOf(', '),m.lastIndexOf('，'));if(k<mc*0.4)k=m.lastIndexOf(' ');return t.slice(0,k>0?k+1:mc).trim()}
 function setMode(m,quiet){MODE=m;$('mOutline').classList.toggle('on',m=='outline');$('mBox').classList.toggle('on',m=='box');$('outlineRow').classList.toggle('hide',m!='outline');$('boxRow').classList.toggle('hide',m!='box');if(!quiet)upd()}
@@ -253,14 +264,22 @@ function hexA(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16},${n>>8&2
 function upd(){
   const s=style(),ov=$('ov'),sp=$('ovText'),H=$('stage').clientHeight||300;
   // video occupies the letterboxed area; approximate using real aspect
-  const ar=META.width&&META.height?META.width/META.height:16/9, W=$('stage').clientWidth, vh=Math.min(H,W/ar);
-  const px=s.size/100*vh, k=vh/720;
+  const fo=frameOpt(),oar=outAR(),stg=$('stage');stg.style.aspectRatio=String(oar);stg.style.maxHeight='70vh';stg.style.marginInline='auto';stg.style.width=oar<1?`min(100%, calc(70vh * ${oar}))`:'100%';
+  const changed=fo.aspect!='keep';$('fitBox').classList.toggle('hide',!changed);$('cropRow').classList.toggle('hide',!(changed&&fo.fit=='crop'));$('cxV').textContent=fo.x<34?'trái':fo.x>66?'phải':'giữa';
+  const W=stg.clientWidth, Hs=stg.clientHeight||H;
+  const vid=$('vid');vid.style.objectFit=(changed&&fo.fit=='crop')?'cover':'contain';vid.style.objectPosition=`${fo.x}% 50%`;
+  stg.style.background=(changed&&fo.fit=='blur')?'#1b1e25':'#000';
+  // where the source picture lands inside the output frame
+  const sar=META.width&&META.height?META.width/META.height:16/9;
+  const sc=(changed&&fo.fit=='crop')?Math.max(W/sar,Hs):Math.min(W/sar,Hs);const pw=sc*sar,ph=sc;const px0=(changed&&fo.fit=='crop')?(W-pw)*fo.x/100:(W-pw)/2,py0=(Hs-ph)/2;
+  const vh=Hs, ref=Math.min(W,Hs);
+  const px=s.size/100*ref, k=ref/720;
   sp.style.fontFamily=`"${s.font}",Arial`;sp.style.fontSize=px+'px';sp.style.color=s.color;sp.style.fontWeight=s.bold?700:400;sp.style.fontStyle=s.italic?'italic':'normal';sp.style.textTransform=s.upper?'uppercase':'none';sp.style.lineHeight=1.25;
   if(s.mode=='box'){sp.style.background=hexA(s.bg,s.bgOpacity);sp.style.padding=`${px*.12}px ${px*.25}px`;sp.style.textShadow='none';sp.style.webkitTextStroke=''}
   else{sp.style.background='none';sp.style.padding=0;const w=s.outlineWidth*k,c=s.outlineColor,sh=s.shadow*k;let t=[];if(w>0)for(let a=0;a<16;a++){const r=a/16*Math.PI*2;t.push(`${(Math.cos(r)*w).toFixed(1)}px ${(Math.sin(r)*w).toFixed(1)}px 0 ${c}`)}if(sh>0)t.push(`${sh+w}px ${sh+w}px ${sh}px rgba(0,0,0,.6)`);sp.style.textShadow=t.join(',')||'none'}
-  const off=(H-vh)/2, m=s.margin/100*vh;
+  const off=0, m=s.margin/100*vh;
   const bo=blurOpt(),band=$('blurBand');band.classList.toggle('hide',!bo.on||$('tabOut').classList.contains('on'));$('blurRow').classList.toggle('hide',!bo.on);
-  band.style.height=(bo.height/100*vh)+'px';band.style.top='auto';band.style.bottom=(off+bo.bottom/100*vh)+'px';band.style.backdropFilter=band.style.webkitBackdropFilter=`blur(${bo.strength/3}px)`;
+  band.style.height=(bo.height/100*ph)+'px';band.style.bottom='auto';band.style.top=(py0+ph*(1-(bo.bottom+bo.height)/100))+'px';band.style.left=Math.max(0,px0)+'px';band.style.right='auto';band.style.width=Math.min(W,pw)+'px';band.style.backdropFilter=band.style.webkitBackdropFilter=`blur(${bo.strength/3}px)`;
   sp.style.display='inline-block';sp.style.maxWidth=(s.maxChars*px*0.55)+'px';
   $('mcV').textContent=s.maxChars;$('mlV').textContent=s.maxLines;$('bbV').textContent=bo.bottom+'%';$('bhV').textContent=bo.height+'%';$('bsV').textContent=bo.strength;
   ov.style.top=ov.style.bottom='auto';ov.style.transform='';
@@ -317,7 +336,7 @@ function showTab(t){
 }
 async function realPreview(){
   const txt=$('ovText').textContent;$('stMsg').textContent='Đang render khung hình thật...';
-  const r=await fetch(`/api/job/${JOB}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({time:$('vid').currentTime||1,text:txt,style:style(),blur:blurOpt()})});
+  const r=await fetch(`/api/job/${JOB}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({time:$('vid').currentTime||1,text:txt,style:style(),blur:blurOpt(),frame:frameOpt()})});
   if(!r.ok){$('stMsg').innerHTML='<span class="err">Lỗi render preview</span>';return}
   $('frame').src=URL.createObjectURL(await r.blob());$('frame').classList.remove('hide');$('vid').classList.add('hide');$('ov').classList.add('hide');
   $('stMsg').textContent='Đây là khung hình thật (bấm tab "Video gốc" để quay lại).';
@@ -393,7 +412,7 @@ async function sample(){
 // ---------- render ----------
 async function render(){
   if(dirty)await saveSegs();window._rendering=true;
-  await post(`/api/job/${JOB}/render`,{voice:$('voice').value,rate:+$('rate').value,pitch:+$('pitch').value,bgVolume:+$('bgVol').value,maxSpeed:+$('maxSpeed').value,dub:$('dub').checked,burn:$('burn').checked,style:style(),blur:blurOpt()});
+  await post(`/api/job/${JOB}/render`,{voice:$('voice').value,rate:+$('rate').value,pitch:+$('pitch').value,bgVolume:+$('bgVol').value,maxSpeed:+$('maxSpeed').value,dub:$('dub').checked,burn:$('burn').checked,style:style(),blur:blurOpt(),frame:frameOpt()});
   refresh();
 }
 

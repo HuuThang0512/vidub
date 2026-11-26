@@ -233,7 +233,8 @@ def ass_time(x):
 
 def build_ass(path, items, st, w, h):
     # items: list of (start, end, text)
-    size = int(float(st.get('size', 5)) / 100 * h)  # size as % of video height
+    ref = min(w, h)  # short side: same look for 16:9, sane size for 9:16
+    size = int(float(st.get('size', 5)) / 100 * ref)
     align = {'bottom': 2, 'middle': 5, 'top': 8}.get(st.get('position', 'bottom'), 2)
     marginv = int(float(st.get('margin', 6)) / 100 * h)
     box = st.get('mode', 'outline') == 'box'
@@ -243,7 +244,7 @@ def build_ass(path, items, st, w, h):
         border, outline, shadow, back = 3, max(1, int(size * 0.25)), 0, outline_col
     else:
         outline_col = ass_color(st.get('outlineColor', '#000000'))
-        border, outline, shadow = 1, float(st.get('outlineWidth', 2)) * h / 720, float(st.get('shadow', 1)) * h / 720
+        border, outline, shadow = 1, float(st.get('outlineWidth', 2)) * ref / 720, float(st.get('shadow', 1)) * ref / 720
         back = ass_color(st.get('shadowColor', '#000000'), 0.6)
     font = st.get('font', 'Arial'); bold = -1 if st.get('bold') else 0; italic = -1 if st.get('italic') else 0
     hdr = f"""[Script Info]
@@ -316,6 +317,32 @@ def split_items(items, maxc):
             y = b if k == len(ch) - 1 else x + (b - a) * len(c) / tot
             out.append((x, y, c)); x = y
     return out
+
+ASPECTS = {'16:9': (16, 9), '9:16': (9, 16), '1:1': (1, 1), '4:5': (4, 5)}
+
+def frame_dims(opt, w, h):
+    """Output size for the chosen aspect. Short side = min(1080, source short side), even numbers."""
+    fr = opt.get('frame') or {}
+    a = ASPECTS.get(fr.get('aspect'))
+    if not a: return w, h
+    short = min(1080, min(w, h))
+    if a[0] >= a[1]: H_ = short; W_ = short * a[0] / a[1]
+    else: W_ = short; H_ = short * a[1] / a[0]
+    return int(W_) // 2 * 2, int(H_) // 2 * 2
+
+def reframe_vf(opt, w, h):
+    fr = opt.get('frame') or {}
+    W_, H_ = frame_dims(opt, w, h)
+    if (W_, H_) == (w, h) and fr.get('aspect') not in ASPECTS: return ''
+    fit = fr.get('fit', 'blur'); x = max(0.0, min(1.0, float(fr.get('x', 50)) / 100))
+    if fit == 'crop':
+        return f"scale={W_}:{H_}:force_original_aspect_ratio=increase,crop={W_}:{H_}:(iw-{W_})*{x:.3f}:(ih-{H_})/2,setsar=1,"
+    if fit == 'pad':
+        return f"scale={W_}:{H_}:force_original_aspect_ratio=decrease,pad={W_}:{H_}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,"
+    # blurred background (cheap: blur at 1/4 size, then upscale)
+    return (f"split[rf0][rf1];[rf0]scale={W_ // 4 // 2 * 2}:{H_ // 4 // 2 * 2}:force_original_aspect_ratio=increase,"
+            f"crop={W_ // 4 // 2 * 2}:{H_ // 4 // 2 * 2},boxblur=10:2,scale={W_}:{H_},eq=brightness=-0.08[rbg];"
+            f"[rf1]scale={W_}:{H_}:force_original_aspect_ratio=decrease[rfg];[rbg][rfg]overlay=(W-w)/2:(H-h)/2,setsar=1,")
 
 def blur_vf(opt, vh):
     bl = opt.get('blur') or {}
@@ -442,7 +469,8 @@ def do_render(j, opt):
     maxc = int(opt.get('style', {}).get('maxChars', 42)) * int(opt.get('style', {}).get('maxLines', 2))
     items = split_items(items, maxc)
     burn = opt.get('burn', True)
-    if burn: build_ass(os.path.join(d, 'subs.ass'), items, opt.get('style', {}), w, h)
+    OW, OH = frame_dims(opt, w, h)
+    if burn: build_ass(os.path.join(d, 'subs.ass'), items, opt.get('style', {}), OW, OH)
     status(j, progress=82, msg='Đang ghép video (bước cuối)...')
     bgv = float(opt.get('bgVolume', 15)) / 100; vv = float(opt.get('voiceVolume', 100)) / 100
     cmd = ['ffmpeg', '-v', 'error', '-y', '-i', 'input.mp4']
@@ -452,7 +480,7 @@ def do_render(j, opt):
                 '-map', '0:v', '-map', '[aout]']
     else:
         cmd += ['-map', '0:v', '-map', '0:a?']
-    vf = blur_vf(opt, h) + ('ass=subs.ass' if burn else '')
+    vf = blur_vf(opt, h) + reframe_vf(opt, w, h) + ('ass=subs.ass' if burn else '')
     vf = vf.rstrip(',')
     if vf: cmd += ['-vf', vf, '-c:v', 'libx264', '-crf', '21', '-preset', 'fast']
     else: cmd += ['-c:v', 'copy']
@@ -628,9 +656,10 @@ def preview(j):
     ass = os.path.join(d, 'preview.ass')
     st = body.get('style', {})
     first = split_sub(text, int(st.get('maxChars', 42)) * int(st.get('maxLines', 2)))[0]
-    build_ass(ass, [(0, 100, first)], st, m['width'], m['height'])
+    OW, OH = frame_dims(body, m['width'], m['height'])
+    build_ass(ass, [(0, 100, first)], st, OW, OH)
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(t), '-i', 'input.mp4', '-frames:v', '1', '-vf',
-                    'setpts=PTS-STARTPTS,' + blur_vf(body, m['height']) + 'ass=preview.ass', 'preview.jpg'], cwd=d, check=True)
+                    'setpts=PTS-STARTPTS,' + blur_vf(body, m['height']) + reframe_vf(body, m['width'], m['height']) + 'ass=preview.ass', 'preview.jpg'], cwd=d, check=True)
     return send_file(os.path.join(d, 'preview.jpg'), mimetype='image/jpeg', max_age=0)
 
 @app.get('/api/job/<j>/file/<name>')
